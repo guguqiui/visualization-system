@@ -1,15 +1,7 @@
 <template>
   <div class="container">
     <!-- 图表部分 -->
-    <div id="chart" class="chart">
-    </div>
-    <div class="filter">
-        <label for="typeSelect">Select Type:</label>
-        <select id="typeSelect" v-model="selectedType" @change="filterByType">
-          <option value="">All Types</option>
-          <option v-for="type in availableTypes" :key="type" :value="type">{{ type }}</option>
-        </select>
-      </div>
+    <div id="chart" class="chart"></div>
     
     <!-- 展示点击的 instance 列表的区域 -->
     <div class="instance-content" v-if="selectedInstances.length > 0">
@@ -41,32 +33,38 @@ export default {
   name: 'App',
   data() {
     return {
-      selectedInstances: [], // 存储当前选中的 instance 列表
-      currentIndex: 0, // 当前展示的 instance 索引
-      thirdElementToInstances: {} // 存储 thirdElement 到多个 instance 的映射
+      selectedInstances: [], // Store the currently selected instance list
+      currentIndex: 0, // Current instance index for display
+      thirdElementToInstances: {}, // Mapping from thirdElement to multiple instances
+      edgeVisibility: {}, // Track edge visibility for stigmaNodes and noStigmaNodes
+      edges: [], // Store edges for toggling
+      nodes: [],
+      myChart: null // Reference to the chart instance
     };
   },
   mounted() {
     var chartDom = document.getElementById('chart');
-    var myChart = echarts.init(chartDom);
+    this.myChart = echarts.init(chartDom); // Assign to this.myChart
 
-    // type 颜色定义
+    // Define color mappings for different ontology types (typeToColorMap)
     const typeToColorMap = {
-      'cognitive judgment': '#FF6666',   // 红色
-      'signaling event': '#66CC66',      // 浅绿色
-      'nature': '#FFCC66',               // 浅橙色
-      'suggestion': '#66CCCC',           // 浅青色
-      'belief': '#9966CC',               // 紫色
-      'feeling': '#FF99CC',              // 粉红色
-      'situation': '#FF9966',            // 橙色
-      'past experience': '#6699FF',      // 蓝色
-      'potential outcome': '#FFCC99',    // 浅黄色
-      'behavior': '#CC66FF',             // 浅紫色
-      'intention': '#FF6699'             // 玫红色
+      'cognitive judgment': '#FF6666',
+      'signaling event': '#66CC66',
+      'nature': '#FFCC66',
+      'suggestion': '#66CCCC',
+      'belief': '#9966CC',
+      'feeling': '#FF99CC',
+      'situation': '#FF9966',
+      'past experience': '#6699FF',
+      'potential outcome': '#FFCC99',
+      'behavior': '#CC66FF',
+      'intention': '#FF6699'
     };
 
-    // attribution 颜色定义
+    // attribution colors (customColors for attribution types)
     const customColors = {
+      'stigma':'#ff6666',
+      'no stigma': '#66cc66',
       'responsibility': '#F5B7B1',
       'fear and dangerousness': '#D7BDE2',
       'anger': '#D7BDE2',
@@ -97,11 +95,14 @@ export default {
 
     const processedEdges = new Set();
 
+    // Edge visibility for all stigma and no stigma nodes
+    stigmaNodes.forEach(node => this.edgeVisibility[node] = false);
+    noStigmaNodes.forEach(node => this.edgeVisibility[node] = false);
+
+    // Fetch the data and process nodes/edges
     fetch('/data/test.json')
       .then(response => response.json())
       .then(data => {
-        let nodes = [];
-        let edges = [];
 
         const fixedNodePositions = {
           'responsibility': { x: 0, y: -1000 },
@@ -122,95 +123,79 @@ export default {
           'no stigma': { x: 1000, y: 0 } // 固定 no stigma 节点
         };
 
+        // Create nodes and hide initial edges
         data.forEach(instance => {
-          let source = instance.category_;
-          let target = instance.attribution_type_;
+          let source = instance.category_;  // Category (source node)
+          let target = instance.attribution_type_;  // Attribution (target node)
 
-          // 处理source节点
-          // 为stigma或no stigma节点反转方向
-          if (stigmaNodes.has(source) || noStigmaNodes.has(source)) {
-            edges.push({
-              source: target,
-              target: source,
-              label: 'related to',
-              lineStyle: { color: customColors[source] || '#cccccc' }
-            });
-          } else {
-            edges.push({
-              source: target,
-              target: source,
-              label: 'related to',
-              lineStyle: { color: customColors[target] || '#cccccc' }
-            });
+          // Check if the source node has a fixed position
+          let fixed = false, x = null, y = null;
+          if (fixedNodePositions[source]) {
+            fixed = true;
+            x = fixedNodePositions[source].x;
+            y = fixedNodePositions[source].y;
           }
 
-          if (!nodes.some(node => node.name === source)) {
-            let size = 100;
-            let color = '#ff6666';
-            let category = 'stigma';
+          // Process the source node
+          if (!this.nodes.some(node => node.name === source)) {
+            // Assign color based on the ontology type (using typeToColorMap)
+            let nodeColor = customColors[source] || '#cccccc';
 
-            if (source === 'no stigma') {
-              size = 100;
-              color = '#66cc66';
-              category = 'no stigma';
-            }
-            // 检查是否需要固定位置
-            let fixed = false;
-            let x = null;
-            let y = null;
+            let size = 100;  // Default size for the source node
+            let category = stigmaNodes.has(source) ? 'stigma' : noStigmaNodes.has(source) ? 'no stigma' : 'other';
 
-            if (fixedNodePositions[source]) {
-              fixed = true;
-              x = fixedNodePositions[source].x;
-              y = fixedNodePositions[source].y;
-            }
-
-            nodes.push({
+            // Add the source node to the list if it doesn't exist
+            this.nodes.push({
               name: source,
               category,
               symbolSize: size,
-              itemStyle: { color },
-              fixed,  // 固定属性
-              x,      // x 坐标
-              y       // y 坐标
+              itemStyle: { color: nodeColor },
+              fixed,  // If the node is fixed, mark it
+              x,      // x position if fixed
+              y       // y position if fixed
             });
           }
-          
-          // 处理target节点
-          if (!nodes.some(node => node.name === target)) {
-            let size = 60;
-            let color = customColors[target] || '#cccccc';
-            let category = 'other';
 
-            if (stigmaNodes.has(target)) {
-              size = 60;
-              category = 'stigma';
-            } else if (noStigmaNodes.has(target)) {
-              size = 60;
-              category = 'no stigma';
-            }
+          // Process the target node (attribution_type_)
+          if (!this.nodes.some(node => node.name === target)) {
+            let nodeColor = customColors[target] || '#cccccc';  // Assign a color to the target node
 
-            // 检查是否需要固定位置
-            let fixed = false;
-            let x = null;
-            let y = null;
+            let size = 60;  // Default size for the target node
+            let category = stigmaNodes.has(target) ? 'stigma' : noStigmaNodes.has(target) ? 'no stigma' : 'other';
 
+            // Check for fixed positions for the target node
+            fixed = false;
+            x = null;
+            y = null;
             if (fixedNodePositions[target]) {
               fixed = true;
               x = fixedNodePositions[target].x;
               y = fixedNodePositions[target].y;
             }
 
-            nodes.push({
+            // Add the target node if it doesn't already exist
+            this.nodes.push({
               name: target,
               category,
               symbolSize: size,
-              itemStyle: { color },
-              fixed,  // 固定属性
-              x,      // x 坐标
-              y       // y 坐标
+              itemStyle: { color: nodeColor },
+              fixed,  // If the node is fixed, mark it
+              x,      // x position if fixed
+              y       // y position if fixed
             });
           }
+
+          // Create the edge between the source and target
+          let edge = {
+            source: target,  // Target first in this context
+            target: source,  // Source second
+            label: 'related to',  // Edge label
+            lineStyle: { color: customColors[source] || '#cccccc' },  // Edge color based on source node
+            // invisible: true  // Initially hide the edge
+          };
+
+          // Add the edge to the list
+          this.edges.push(edge);
 
           // 处理 thirdElement 节点
           instance.triples.forEach(triple => {
@@ -223,10 +208,13 @@ export default {
 
               // 检查是否已经处理过此边
               if (!processedEdges.has(edgeKey)) {
-                edges.push({
+                this.edges.push({
                   source: thirdElement,
                   target: target,
-                  lineStyle: { color: customColors[target] || '#cccccc' },
+                  lineStyle: { 
+                    color: customColors[target] || '#cccccc',
+                    opacity: 0 // 初始不可见
+                   },
                   label: 'related to'
                 });
                 processedEdges.add(edgeKey);
@@ -243,18 +231,20 @@ export default {
                   // 确保将类型赋值给 instance
                   if (!instance.type) {
                     instance.type = type;  // 将类型附加到 instance 中
-                    console.log('Assigned type:', instance.type);  // 调试输出
                   }
                 }
               });
 
               // 添加 thirdElement 节点，如果它尚不存在
-              if (!nodes.some(node => node.name === thirdElement)) {
-                nodes.push({
+              if (!this.nodes.some(node => node.name === thirdElement)) {
+                this.nodes.push({
                   name: thirdElement,
                   category: 'other',
                   symbolSize: 10,
-                  itemStyle: { color: colorForThirdElement },
+                  itemStyle: { 
+                    color: colorForThirdElement,
+                    opacity: 0
+                   },
                   label: { show: false }
                 });
               }
@@ -282,7 +272,7 @@ export default {
             }
           },
           legend: {
-            data: ['stigma', 'no stigma', 'positive cognitive judgment', 'negative cognitive judgment', 'positive feeling', 'negative feeling', 'positive behavior', 'negative behavior']
+            data: ['stigma', 'no stigma', 'cognitive judgment', 'feeling', 'behavior']
           },
           series: [
             {
@@ -301,16 +291,13 @@ export default {
               categories: [
                 { name: 'stigma', itemStyle: { color: '#ff6666' } },
                 { name: 'no stigma', itemStyle: { color: '#66cc66' } },
-                { name: 'positive cognitive judgment', itemStyle: { color: '#D98880' } },
-                { name: 'negative cognitive judgment', itemStyle: { color: '#F5B7B1' } },
-                { name: 'positive feeling', itemStyle: { color: '#BB8FCE' } },
-                { name: 'negative feeling', itemStyle: { color: '#D7BDE2' } },
-                { name: 'positive behavior', itemStyle: { color: '#87CEEB' } },
-                { name: 'negative behavior', itemStyle: { color: '#ADD8E6' } },
+                { name: 'cognitive judgment', itemStyle: { color: '#F5B7B1' } },
+                { name: 'feeling', itemStyle: { color: '#D7BDE2' } },
+                { name: 'behavior', itemStyle: { color: '#ADD8E6' } },
                 { name: 'other', itemStyle: { color: '#cccccc' } }
               ],
-              data: nodes,
-              links: edges,
+              data: this.nodes,
+              links: this.edges,
               force: {
                 edgeLength: [150, 300],
                 repulsion: 1000,
@@ -331,16 +318,23 @@ export default {
           ]
         };
 
-        myChart.setOption(option);
+        this.myChart.setOption(option);
 
         // 监听图表的点击事件
-        myChart.on('click', (params) => {
+        this.myChart.on('click', (params) => {
+          console.log('Clicked node:', params.data.name);  
           const instances = this.thirdElementToInstances?.[params.data.name];
           
           if (instances && instances.length > 0) {
             this.selectedInstances = instances;
             this.currentIndex = 0; // 每次点击时重置到第一个实例
-            console.log('Instances after chart click:', this.selectedInstances);
+            // console.log('Instances after chart click:', this.selectedInstances);
+          }
+          
+          // 增加对 stigmaNodes 和 noStigmaNodes 的检查并切换边的可见性
+          if (stigmaNodes.has(params.data.name) || noStigmaNodes.has(params.data.name)) {
+            console.log(params.data.name);
+            this.toggleEdges(params.data.name);  // 调用切换边的函数
           }
         });
       })
@@ -361,6 +355,43 @@ export default {
         this.currentIndex++;
         console.log('Next instance index:', this.currentIndex); // 调试输出
       }
+    },
+    // Toggle edges for a specific node
+    toggleEdges(nodeName) {
+      this.edgeVisibility[nodeName] = !this.edgeVisibility[nodeName]; // 更新节点的可见性状态
+      let sourceNodes = new Set(); // 找到所有指向 nodeName 的节点
+
+      // 遍历所有边，找到与点击节点相关的边并切换可见性
+      this.edges.forEach(edge => {
+        if (edge.target === nodeName) {
+          // 使用 lineStyle.opacity 来控制边的可见性
+          edge.lineStyle = edge.lineStyle || {};
+          edge.lineStyle.opacity = this.edgeVisibility[nodeName] ? 1 : 0;  // 切换可见性
+          sourceNodes.add(edge.source); // 将源节点添加到 sourceNodes 集合中
+        }
+      });
+
+      // 改变点的可见性
+      sourceNodes.forEach(sourceNode => {
+        this.nodes.forEach(node => {
+          if (node.name === sourceNode) {
+            // node.symbolSize = 10;  // 设置节点的大小为可见状态
+            node.itemStyle.opacity = 1;  // 设置节点的透明度为可见状态
+          }
+        });
+      });
+
+      // 确保图表根据新的可见性状态更新
+      this.myChart.setOption({
+        series: [
+          {
+            links: this.edges, // 更新边的可见性
+            data: this.nodes  // 更新节点
+          }
+        ]
+      });
+
+      console.log('Chart updated with new edge visibility for node:', nodeName);  // 确认图表更新
     }
   }
 };
@@ -377,18 +408,6 @@ export default {
 .chart {
   flex-grow: 1;
   min-width: 0;
-  position: relative;
-}
-
-.filter {
-  position: absolute;
-  top: 10px;
-  left: 10px; /* 放在右上角 */
-  z-index: 1000;
-  background-color: white;
-  padding: 10px;
-  border-radius: 5px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
 .instance-content {
