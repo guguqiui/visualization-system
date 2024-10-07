@@ -1,0 +1,62 @@
+[
+    {
+        "instance_id": 1,
+        "qtype": "responsibility",
+        "question": "Just like what is mentioned in the story, Avery is currently facing difficulties in both their relationships with colleagues and their work performance. Do you believe Avery’s current situation is primarily a result of their actions? Is his mental condition an indication of personal weakness? Please share your thoughts.",
+        "opinion": "No not at all. Avery has a mental health condition that he needs to seek advice and support with medical or otherwise. Avery should make an appointment and go and see his GP.",
+        "category_": "no stigma",
+        "attribution_type_": "no responsibility",
+        "triples": [
+            [
+                "no stigma",
+                "because",
+                "no responsibility"
+            ],
+            [
+                "no responsibility",
+                "because",
+                "has a mental health condition"
+            ],
+            [
+                "needs to seek advice and support with medical or otherwise",
+                "because",
+                "has a mental health condition"
+            ],
+            [
+                "should make an appointment and go and see GP",
+                "because",
+                "needs to seek advice and support with medical or otherwise"
+            ]
+        ],
+        "ontology": [
+            [
+                "no stigma",
+                "no stigma",
+                "because",
+                "no responsibility",
+                "cognitive judgment"
+            ],
+            [
+                "no responsibility",
+                "cognitive judgment",
+                "because",
+                "has a mental health condition",
+                "signaling event"
+            ],
+            [
+                "has a mental health condition",
+                "nature",
+                "lead to",
+                "needs to seek advice and support with medical or otherwise",
+                "suggestion"
+            ],
+            [
+                "needs to seek advice and support with medical or otherwise",
+                "suggestion",
+                "lead to",
+                "should make an appointment and go and see GP",
+                "suggestion"
+            ]
+        ]
+    }
+]
